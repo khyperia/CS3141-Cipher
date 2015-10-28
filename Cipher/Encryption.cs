@@ -9,6 +9,7 @@ namespace Cipher
     class EncryptionService
     {
         Dictionary<string, string> _userDatabaseCache;
+        private static readonly object _signObject = new SHA1CryptoServiceProvider();
 
         public EncryptionService()
         {
@@ -40,7 +41,7 @@ namespace Cipher
             }
         }
 
-        private Dictionary<string, string> LoadUserDatabase()
+        public Dictionary<string, string> LoadUserDatabase()
         {
             if (_userDatabaseCache != null)
                 return _userDatabaseCache;
@@ -53,8 +54,8 @@ namespace Cipher
                     var reader = new BinaryReader(stream);
                     while (reader.BaseStream.Position < reader.BaseStream.Length)
                     {
-                        var name = Encoding.UTF8.GetString(reader.ReadBytes(reader.ReadInt32()));
-                        var key = Encoding.UTF8.GetString(reader.ReadBytes(reader.ReadInt32()));
+                        var name = reader.ReadString();
+                        var key = reader.ReadString();
                         result.Add(name, key);
                     }
                 }
@@ -74,20 +75,26 @@ namespace Cipher
                 var writer = new BinaryWriter(stream);
                 foreach (var kvp in _userDatabaseCache)
                 {
-                    var nameBytes = Encoding.UTF8.GetBytes(kvp.Key);
-                    writer.Write(nameBytes.Length);
-                    writer.Write(nameBytes);
-                    var keyBytes = Encoding.UTF8.GetBytes(kvp.Value);
-                    writer.Write(keyBytes.Length);
-                    writer.Write(keyBytes);
+                    writer.Write(kvp.Key);
+                    writer.Write(kvp.Value);
                 }
             }
+        }
+
+        public void AddUsers(IEnumerable<KeyValuePair<string, string>> nameKeys)
+        {
+            var data = LoadUserDatabase();
+            foreach (var kvp in nameKeys)
+            {
+                data[kvp.Key] = kvp.Value;
+            }
+            SaveUserDatabase();
         }
 
         public void AddUser(string username, string privatekey)
         {
             var data = LoadUserDatabase();
-            data.Add(username, privatekey);
+            data[username] = privatekey;
             SaveUserDatabase();
         }
 
@@ -96,6 +103,23 @@ namespace Cipher
             get
             {
                 return PrivateKey.ToXmlString(false);
+            }
+        }
+
+        public byte[] Sign(byte[] value)
+        {
+            using (var myKey = PrivateKey)
+            {
+                return myKey.SignData(value, _signObject);
+            }
+        }
+
+        public static bool VerifySigned(byte[] value, byte[] signature, string publickey)
+        {
+            using (var theirKey = new RSACryptoServiceProvider())
+            {
+                theirKey.FromXmlString(publickey);
+                return theirKey.VerifyData(value, _signObject, signature);
             }
         }
 
@@ -111,7 +135,7 @@ namespace Cipher
             {
                 theirKey.FromXmlString(key);
                 var bytes = Encoding.UTF8.GetBytes(value);
-                return theirKey.Encrypt(bytes, false);
+                return theirKey.Encrypt(bytes, true);
             }
         }
 
@@ -119,7 +143,7 @@ namespace Cipher
         {
             using (var myKey = PrivateKey)
             {
-                return Encoding.UTF8.GetString(myKey.Decrypt(value, false));
+                return Encoding.UTF8.GetString(myKey.Decrypt(value, true));
             }
         }
     }
