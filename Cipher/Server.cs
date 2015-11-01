@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using Gtk;
 
 namespace Cipher
 {
@@ -29,12 +30,14 @@ namespace Cipher
         private readonly BinaryReader reader;
         private readonly BinaryWriter writer;
         private readonly Queue<KeyValuePair<string, string>> incomingMessages;
-        private readonly Action onRecv;
+        private readonly EventHandler onChange;
+        private readonly bool useApplicationInvoke;
 
-        public Client(string server, int port, EncryptionService encryption, string myName, Action onRecv)
+        public Client(string server, int port, EncryptionService encryption, string myName, EventHandler onChange, bool useApplicationInvoke)
         {
             this.encryption = encryption;
-            this.onRecv = onRecv;
+            this.onChange = onChange;
+            this.useApplicationInvoke = useApplicationInvoke;
             incomingMessages = new Queue<KeyValuePair<string, string>>();
             client = new TcpClient(server, port);
             var stream = client.GetStream();
@@ -45,6 +48,18 @@ namespace Cipher
             var thread = new Thread(ProcessRecv);
             thread.IsBackground = true;
             thread.Start();
+        }
+
+        private void OnChange()
+        {
+            if (useApplicationInvoke)
+            {
+                Application.Invoke(onChange);
+            }
+            else
+            {
+                onChange(null, null);
+            }
         }
 
         private void Authenticate(string myName)
@@ -62,14 +77,15 @@ namespace Cipher
         private void ProcessListres(BinaryReader reader)
         {
             var count = reader.ReadInt32();
-            var dict = new Dictionary<string, string>();
+            var dict = new List<RemoteUser>();
             for (int i = 0; i < count; i++)
             {
                 var name = reader.ReadString();
                 var pubkey = reader.ReadString();
-                dict[name] = pubkey;
+                dict.Add(new RemoteUser(pubkey, name));
             }
             encryption.AddUsers(dict);
+            OnChange();
         }
 
         private void ProcessMsgRecv(BinaryReader reader)
@@ -81,7 +97,7 @@ namespace Cipher
             {
                 incomingMessages.Enqueue(new KeyValuePair<string, string>(name, decrypt));
             }
-            onRecv();
+            OnChange();
         }
 
         private void ProcessCmd(BinaryReader reader, BinaryWriter writer)
@@ -108,7 +124,8 @@ namespace Cipher
             }
             catch (Exception e)
             {
-                Console.WriteLine("Disconnected from server: " + e.Message);
+                Console.WriteLine("Disconnected from server:");
+                Console.WriteLine(e);
             }
         }
 
@@ -117,17 +134,17 @@ namespace Cipher
             writer.Write("list");
         }
 
-        public bool SendMessage(string toUser, string message)
+        public ISet<RemoteUser> GetUsers()
+        {
+            return encryption.LoadUserDatabase();
+        }
+
+        public void SendMessage(RemoteUser toUser, string message)
         {
             var encrypt = encryption.Encrypt(message, toUser);
-            if (encrypt == null)
-            {
-                return false;
-            }
             writer.Write("msg");
-            writer.Write(toUser);
+            writer.Write(toUser.PublicKey);
             writer.WriteLenBytes(encrypt);
-            return true;
         }
 
         public KeyValuePair<string, string> TryGetNextMessage()
@@ -195,13 +212,13 @@ namespace Cipher
 
         private void ProcessMsg(BinaryReader reader, string myName)
         {
-            var sendTo = reader.ReadString();
+            var sendToKey = reader.ReadString();
             var message = reader.ReadLenBytes();
             lock (clients)
             {
                 foreach (var other in clients)
                 {
-                    if (other.Name == sendTo)
+                    if (other.Pubkey == sendToKey)
                     {
                         other.Writer.Write("msgrecv");
                         other.Writer.Write(myName);
