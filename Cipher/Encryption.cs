@@ -139,6 +139,7 @@ namespace Cipher
             var data = LoadUserDatabase();
             foreach (var remoteUser in remoteUsers)
             {
+                data.Remove(remoteUser);
                 data.Add(remoteUser);
             }
             SaveUserDatabase();
@@ -147,7 +148,9 @@ namespace Cipher
         public void AddUser(string username, string privatekey)
         {
             var data = LoadUserDatabase();
-            data.Add(new RemoteUser(username, privatekey));
+            var user = new RemoteUser(username, privatekey);
+            data.Remove(user);
+            data.Add(user);
             SaveUserDatabase();
         }
 
