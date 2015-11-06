@@ -164,6 +164,11 @@ namespace Cipher
             return encryption.LoadUserDatabase();
         }
 
+        public IEnumerable<RemoteUser> LookUpUser(string username)
+        {
+            return encryption.LookUpUser(username);
+        }
+
         public void SendMessage(RemoteUser toUser, string message)
         {
             var encrypt = EncryptionService.Encrypt(message, toUser);

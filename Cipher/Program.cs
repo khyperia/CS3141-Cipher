@@ -1,29 +1,13 @@
-﻿using System;
+using System;
 using Gtk;
 
 namespace Cipher
 {
     class MainClass
     {
-        public static void Window()
+        public static void Window(string name)
         {
-            Application.Init();
-
-            var HelloWorld = new Window("Hello World");
-            HelloWorld.Resize(500, 500);
-
-            var button = new Button();
-            button.Label = "I am a button!";
-            HelloWorld.Add(button);
-
-            HelloWorld.Destroyed += (o, e) =>
-            {
-                Application.Quit();
-            };
-
-            HelloWorld.ShowAll();
-
-            Application.Run();
+            new Gui(name).Run();
         }
 
         private static void OnChange(Client client)
@@ -57,7 +41,7 @@ namespace Cipher
             Console.WriteLine("  connect [addr] [port] [username]");
             Console.WriteLine("  list");
             Console.WriteLine("  send [username] [message...]");
-            Console.WriteLine("  window");
+            Console.WriteLine("  window [username]");
             Console.WriteLine("  quit");
         }
 
@@ -155,7 +139,14 @@ namespace Cipher
                         }
                         break;
                     case "window":
-                        Window();
+                        if (message.Length != 2)
+                        {
+                            Console.WriteLine("Bad syntax");
+                        }
+                        else
+                        {
+                            Window(message[1]);
+                        }
                         break;
                     case "quit":
                         return;
