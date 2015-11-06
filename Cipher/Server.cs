@@ -74,10 +74,19 @@ namespace Cipher
             writer.WriteLenBytes(sign);
         }
 
+        private void AddIncomingMessage(string name, string message)
+        {
+            lock (incomingMessages)
+            {
+                incomingMessages.Enqueue(new KeyValuePair<string, string>(name, message));
+            }
+            OnChange();
+        }
+
         private void ProcessListres(BinaryReader reader)
         {
-            var count = reader.ReadInt32();
             var dict = new List<RemoteUser>();
+            var count = reader.ReadInt32();
             for (int i = 0; i < count; i++)
             {
                 var name = reader.ReadString();
@@ -93,11 +102,19 @@ namespace Cipher
             var name = reader.ReadString();
             var message = reader.ReadLenBytes();
             var decrypt = encryption.Decrypt(message);
-            lock (incomingMessages)
+            AddIncomingMessage(name, decrypt);
+        }
+
+        private void ProcessUserNotFound(BinaryReader reader)
+        {
+            var sentTo = reader.ReadString();
+            foreach (var user in encryption.LoadUserDatabase())
             {
-                incomingMessages.Enqueue(new KeyValuePair<string, string>(name, decrypt));
+                if (user.PublicKey == sentTo)
+                {
+                    AddIncomingMessage("[server]", "Sending to " + user.Username + " failed: user not online");
+                }
             }
-            OnChange();
         }
 
         private void ProcessCmd(BinaryReader reader, BinaryWriter writer)
@@ -107,9 +124,17 @@ namespace Cipher
             {
                 ProcessListres(reader);
             }
-            if (string.Equals(cmd, "msgrecv", StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(cmd, "msgrecv", StringComparison.OrdinalIgnoreCase))
             {
                 ProcessMsgRecv(reader);
+            }
+            else if (string.Equals(cmd, "usernotfound", StringComparison.OrdinalIgnoreCase))
+            {
+                ProcessUserNotFound(reader);
+            }
+            else
+            {
+                // Invalid command
             }
         }
 
@@ -141,7 +166,7 @@ namespace Cipher
 
         public void SendMessage(RemoteUser toUser, string message)
         {
-            var encrypt = encryption.Encrypt(message, toUser);
+            var encrypt = EncryptionService.Encrypt(message, toUser);
             writer.Write("msg");
             writer.Write(toUser.PublicKey);
             writer.WriteLenBytes(encrypt);
@@ -210,48 +235,55 @@ namespace Cipher
             serverSocket.Stop();
         }
 
-        private void ProcessMsg(BinaryReader reader, string myName)
+        private void ProcessMsg(BinaryReader reader, ClientCon me)
         {
             var sendToKey = reader.ReadString();
             var message = reader.ReadLenBytes();
             lock (clients)
             {
+                var found = false;
                 foreach (var other in clients)
                 {
                     if (other.Pubkey == sendToKey)
                     {
+                        found = true;
                         other.Writer.Write("msgrecv");
-                        other.Writer.Write(myName);
+                        other.Writer.Write(me.Name);
                         other.Writer.WriteLenBytes(message);
                     }
                 }
-            }
-        }
-
-        private void ProcessList(BinaryWriter writer)
-        {
-            lock (clients)
-            {
-                writer.Write("listres");
-                writer.Write(clients.Count);
-                foreach (var other in clients)
+                if (!found)
                 {
-                    writer.Write(other.Name);
-                    writer.Write(other.Pubkey);
+                    me.Writer.Write("usernotfound");
+                    me.Writer.Write(sendToKey);
                 }
             }
         }
 
-        private void ProcessCmd(BinaryReader reader, BinaryWriter writer, string myName)
+        private void ProcessList(ClientCon me)
+        {
+            lock (clients)
+            {
+                me.Writer.Write("listres");
+                me.Writer.Write(clients.Count);
+                foreach (var other in clients)
+                {
+                    me.Writer.Write(other.Name);
+                    me.Writer.Write(other.Pubkey);
+                }
+            }
+        }
+
+        private void ProcessCmd(BinaryReader reader, ClientCon me)
         {
             var cmd = reader.ReadString();
             if (string.Equals(cmd, "msg", StringComparison.OrdinalIgnoreCase))
             {
-                ProcessMsg(reader, myName);
+                ProcessMsg(reader, me);
             }
             else if (string.Equals(cmd, "list", StringComparison.OrdinalIgnoreCase))
             {
-                ProcessList(writer);
+                ProcessList(me);
             }
             else
             {
@@ -272,6 +304,18 @@ namespace Cipher
                 }
                 var authReader = new BinaryReader(new MemoryStream(authToken));
                 var nick = authReader.ReadString();
+                lock (clients)
+                {
+                    foreach (var other in clients)
+                    {
+                        if (other.Pubkey == pubkey && other.Name != nick)
+                        {
+                            Console.WriteLine(nick + " (" + tcpClient.Client.RemoteEndPoint +
+                                "): Cannot log in with the same publickey as " + other.Name);
+                            return new ClientCon();
+                        }
+                    }
+                }
                 return new ClientCon(tcpClient, writer, nick, pubkey);
             }
             catch (Exception e)
@@ -304,7 +348,7 @@ namespace Cipher
                     Console.WriteLine(client.Client.RemoteEndPoint + ": authed as " + clientCon.Name);
                     while (true)
                     {
-                        ProcessCmd(reader, writer, clientCon.Name);
+                        ProcessCmd(reader, clientCon);
                     }
                 }
                 finally

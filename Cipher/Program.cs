@@ -1,5 +1,4 @@
 ﻿using System;
-using System.IO;
 using Gtk;
 
 namespace Cipher
@@ -51,6 +50,17 @@ namespace Cipher
             Console.Write("> ");
         }
 
+        private static void Help()
+        {
+            Console.WriteLine(" Enter action:");
+            Console.WriteLine("  help");
+            Console.WriteLine("  connect [addr] [port] [username]");
+            Console.WriteLine("  list");
+            Console.WriteLine("  send [username] [message...]");
+            Console.WriteLine("  window");
+            Console.WriteLine("  quit");
+        }
+
         public static void Main(string[] args)
         {
             if (args.Length == 2 && args[0] == "server")
@@ -65,18 +75,11 @@ namespace Cipher
                 return;
             }
             Console.WriteLine("Hello World from Team Cipher's Encrypted Messaging Service!");
+            Help();
             var encryptor = new EncryptionService();
             var network = (Client)null;
             while (true)
             {
-                Console.WriteLine(" ~~~");
-                Console.WriteLine(" Enter action:");
-                Console.WriteLine("  connect [addr] [port] [username]");
-                Console.WriteLine("  list");
-                Console.WriteLine("  send [username] [message...]");
-                Console.WriteLine("  window");
-                Console.WriteLine("  quit");
-                Console.WriteLine(" ~~~");
                 Console.Write("> ");
                 var readLine = Console.ReadLine();
                 if (readLine == null)
@@ -91,6 +94,9 @@ namespace Cipher
                 }
                 switch (message[0])
                 {
+                    case "help":
+                        Help();
+                        break;
                     case "connect":
                         if (network == null)
                         {
