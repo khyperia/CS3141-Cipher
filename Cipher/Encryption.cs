@@ -88,50 +88,55 @@ namespace Cipher
 
         public ISet<RemoteUser> LoadUserDatabase()
         {
-            if (_userDatabaseCache != null)
-                return _userDatabaseCache;
-            var path = UserDatabaseName;
-            var result = new HashSet<RemoteUser>();
-            if (File.Exists(path))
+            if (_userDatabaseCache == null)
             {
-                using (var stream = File.OpenRead(path))
+                var path = UserDatabaseName;
+                var result = new HashSet<RemoteUser>();
+                try
                 {
-                    var reader = new BinaryReader(stream);
-                    while (reader.BaseStream.Position < reader.BaseStream.Length)
+                    using (var stream = File.OpenRead(path))
                     {
-                        try
+                        var reader = new BinaryReader(stream);
+                        while (reader.BaseStream.Position < reader.BaseStream.Length)
                         {
-                            var name = reader.ReadString();
-                            var publickey = reader.ReadString();
-                            result.Add(new RemoteUser(publickey, name));
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine("Local user database is corrupted: " + e.Message);
-                            break;
+                            try
+                            {
+                                var name = reader.ReadString();
+                                var publickey = reader.ReadString();
+                                result.Add(new RemoteUser(publickey, name));
+                            }
+                            catch (Exception e)
+                            {
+                                Console.WriteLine("Local user database is corrupted: " + e.Message);
+                                break;
+                            }
                         }
                     }
                 }
+                catch (FileNotFoundException)
+                {
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Unable to load local user database: " + e.Message);
+                }
+                System.Threading.Interlocked.CompareExchange(ref _userDatabaseCache, result, null);
             }
-            _userDatabaseCache = result;
-            return result;
+            return new HashSet<RemoteUser>(_userDatabaseCache); // clone set
         }
 
-        private void SaveUserDatabase()
+        private void SaveUserDatabase(ISet<RemoteUser> toSave)
         {
-            if (_userDatabaseCache == null || _userDatabaseCache.Count == 0)
-            {
-                return;
-            }
-            using (var stream = File.OpenWrite(UserDatabaseName))
+            using (var stream = File.Open(UserDatabaseName, FileMode.Create))
             {
                 var writer = new BinaryWriter(stream);
-                foreach (var kvp in _userDatabaseCache)
+                foreach (var kvp in toSave)
                 {
                     writer.Write(kvp.Username);
                     writer.Write(kvp.PublicKey);
                 }
             }
+            _userDatabaseCache = toSave;
         }
 
         public void AddUsers(IEnumerable<RemoteUser> remoteUsers)
@@ -142,7 +147,7 @@ namespace Cipher
                 data.Remove(remoteUser);
                 data.Add(remoteUser);
             }
-            SaveUserDatabase();
+            SaveUserDatabase(data);
         }
 
         public void AddUser(string username, string privatekey)
@@ -151,7 +156,7 @@ namespace Cipher
             var user = new RemoteUser(username, privatekey);
             data.Remove(user);
             data.Add(user);
-            SaveUserDatabase();
+            SaveUserDatabase(data);
         }
 
         public string MyKey
@@ -191,22 +196,31 @@ namespace Cipher
             }
         }
 
-        public byte[] Encrypt(string value, RemoteUser toUser)
+        public static byte[] Encrypt(byte[] value, string publicKey)
         {
             using (var theirKey = new RSACryptoServiceProvider())
             {
-                theirKey.FromXmlString(toUser.PublicKey);
-                var bytes = Encoding.UTF8.GetBytes(value);
-                return theirKey.Encrypt(bytes, true);
+                theirKey.FromXmlString(publicKey);
+                return theirKey.Encrypt(value, true);
+            }
+        }
+
+        public static byte[] Encrypt(string value, RemoteUser toUser)
+        {
+            return Encrypt(Encoding.UTF8.GetBytes(value), toUser.PublicKey);
+        }
+
+        public byte[] DecryptBytes(byte[] value)
+        {
+            using (var myKey = PrivateKey)
+            {
+                return myKey.Decrypt(value, true);
             }
         }
 
         public string Decrypt(byte[] value)
         {
-            using (var myKey = PrivateKey)
-            {
-                return Encoding.UTF8.GetString(myKey.Decrypt(value, true));
-            }
+            return Encoding.UTF8.GetString(DecryptBytes(value));
         }
     }
 }
