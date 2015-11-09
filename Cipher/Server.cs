@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
+using System.Data.SqlClient;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using Gtk;
-using MySql.Data.MySqlClient;
 
 namespace Cipher
 {
@@ -325,7 +324,7 @@ namespace Cipher
                         }
                     }
                 }
-                switch(checkDatabase(nick, pubkey))
+                switch (CheckDatabase(nick, pubkey))
                 {
                     case 0:
                         return new ClientCon(tcpClient, writer, nick, pubkey);
@@ -395,19 +394,19 @@ namespace Cipher
             }
         }
 
-        private int checkDatabase(string nick, string pubkey)
+        private int CheckDatabase(string nick, string pubkey)
         {
             int result = -1;
-            Int32 numOfUsers = 0;
-            MySqlConnection dbConnection = new MySqlConnection(dbString);
+            int numOfUsers = 0;
+            var dbConnection = new SqlConnection(dbString);
             try
             {
                 dbConnection.Open();
                 Console.WriteLine("Successfully connected to Database.");
 
-                MySqlCommand cmd = dbConnection.CreateCommand();
+                var cmd = dbConnection.CreateCommand();
 
-                cmd.CommandText = "SELECT COUNT(*) FROM users WHERE username= @user";
+                cmd.CommandText = "SELECT COUNT(*) FROM users WHERE username=@user";
                 cmd.Parameters.AddWithValue("@user", nick);
                 numOfUsers = Convert.ToInt32(cmd.ExecuteScalar());
 
@@ -422,14 +421,14 @@ namespace Cipher
                     cmd.ExecuteNonQuery();
                     result = 0;
                 }
-                else if(numOfUsers == 1)
+                else if (numOfUsers == 1)
                 {
                     // user is already in db. check the key
                     Console.WriteLine("Returning user possibly detected.");
                     cmd = dbConnection.CreateCommand();
                     cmd.CommandText = "SELECT public_key FROM users WHERE username=@user";
                     cmd.Parameters.AddWithValue("@user", nick.ToLower());
-                    String serverPublicKey = Convert.ToString(cmd.ExecuteScalar());
+                    string serverPublicKey = Convert.ToString(cmd.ExecuteScalar());
                     if (serverPublicKey == pubkey)
                     {
                         Console.WriteLine("Returning user confirmed.");
@@ -447,7 +446,7 @@ namespace Cipher
                     result = -1;
                 }
             }
-            catch (MySqlException e)
+            catch (SqlException e)
             {
                 Console.WriteLine(e);
                 Console.WriteLine("MySql server connection failed.");
