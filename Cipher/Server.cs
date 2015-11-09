@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using Gtk;
+using MySql.Data.MySqlClient;
 
 namespace Cipher
 {
@@ -196,6 +198,8 @@ namespace Cipher
 
         private readonly List<ClientCon> clients;
 
+        private string dbString = "server=192.168.0.107;uid=EMS;pwd=Team_cipher5;database=Cipher;";
+
         struct ClientCon
         {
             public TcpClient Client { get; }
@@ -321,7 +325,19 @@ namespace Cipher
                         }
                     }
                 }
-                return new ClientCon(tcpClient, writer, nick, pubkey);
+                switch(checkDatabase(nick, pubkey))
+                {
+                    case 0:
+                        return new ClientCon(tcpClient, writer, nick, pubkey);
+                    case 1:
+                        return new ClientCon(tcpClient, writer, nick, pubkey);
+                    case 2:
+                        // user connecting with public key that does not match the username
+                        return new ClientCon();
+                    default:
+                        // something else happened
+                        return new ClientCon();
+                }
             }
             catch (Exception e)
             {
@@ -377,6 +393,71 @@ namespace Cipher
                     Console.WriteLine(client.Client.RemoteEndPoint + ": error when closing (" + ex.Message + ")");
                 }
             }
+        }
+
+        private int checkDatabase(string nick, string pubkey)
+        {
+            int result = -1;
+            Int32 numOfUsers = 0;
+            MySqlConnection dbConnection = new MySqlConnection(dbString);
+            try
+            {
+                dbConnection.Open();
+                Console.WriteLine("Successfully connected to Database.");
+
+                MySqlCommand cmd = dbConnection.CreateCommand();
+
+                cmd.CommandText = "SELECT COUNT(*) FROM users WHERE username= @user";
+                cmd.Parameters.AddWithValue("@user", nick);
+                numOfUsers = Convert.ToInt32(cmd.ExecuteScalar());
+
+                if (numOfUsers == 0)
+                {
+                    Console.WriteLine("New user detected.");
+                    // insert user into db.
+                    cmd = dbConnection.CreateCommand();
+                    cmd.CommandText = "INSERT INTO users(username, public_key) VALUES (@user, @key)";
+                    cmd.Parameters.AddWithValue("@user", nick.ToLower());
+                    cmd.Parameters.AddWithValue("@key", pubkey);
+                    cmd.ExecuteNonQuery();
+                    result = 0;
+                }
+                else if(numOfUsers == 1)
+                {
+                    // user is already in db. check the key
+                    Console.WriteLine("Returning user possibly detected.");
+                    cmd = dbConnection.CreateCommand();
+                    cmd.CommandText = "SELECT public_key FROM users WHERE username=@user";
+                    cmd.Parameters.AddWithValue("@user", nick.ToLower());
+                    String serverPublicKey = Convert.ToString(cmd.ExecuteScalar());
+                    if (serverPublicKey == pubkey)
+                    {
+                        Console.WriteLine("Returning user confirmed.");
+                        result = 1;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Duplicate username detected.");
+                        result = 2;
+                    }
+                }
+                else
+                {
+                    // we should never get here.
+                    result = -1;
+                }
+            }
+            catch (MySqlException e)
+            {
+                Console.WriteLine(e);
+                Console.WriteLine("MySql server connection failed.");
+                result = -1;
+            }
+            finally
+            {
+                dbConnection.Close();
+            }
+            return result;
         }
     }
 }
