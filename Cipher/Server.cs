@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Data.SqlClient;
+using System.Data;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using Gtk;
+using MySql.Data.MySqlClient;
 
 namespace Cipher
 {
@@ -197,7 +198,7 @@ namespace Cipher
 
         private readonly List<ClientCon> clients;
 
-        private string dbString = "server=192.168.0.107;uid=EMS;pwd=Team_cipher5;database=Cipher;";
+        private string dbString = "server=localhost;uid=EMS;pwd=Team_cipher5;database=Cipher;";
 
         struct ClientCon
         {
@@ -398,7 +399,7 @@ namespace Cipher
         {
             int result = -1;
             int numOfUsers = 0;
-            var dbConnection = new SqlConnection(dbString);
+            var dbConnection = new MySqlConnection(dbString);
             try
             {
                 dbConnection.Open();
@@ -446,7 +447,7 @@ namespace Cipher
                     result = -1;
                 }
             }
-            catch (SqlException e)
+            catch (MySqlException e)
             {
                 Console.WriteLine(e);
                 Console.WriteLine("MySql server connection failed.");
