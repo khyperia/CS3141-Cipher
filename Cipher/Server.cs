@@ -198,7 +198,7 @@ namespace Cipher
 
         private readonly List<ClientCon> clients;
 
-        private string dbString = "server=192.168.0.107;uid=EMS;pwd=Team_cipher5;database=Cipher;";
+        private string dbString = "server=localhost;uid=EMS;pwd=Team_cipher5;database=Cipher;";
 
         struct ClientCon
         {
