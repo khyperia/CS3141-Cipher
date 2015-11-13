@@ -1,5 +1,4 @@
 using System;
-using Gtk;
 
 namespace Cipher
 {
@@ -91,7 +90,7 @@ namespace Cipher
                             }
                             else
                             {
-                                network = new Client(message[1], port, encryptor, message[3], (sender, evntArgs) => OnChange(network), false);
+                                network = new Client(message[1], port, encryptor, message[3], () => OnChange(network), null);
                             }
                         }
                         else
