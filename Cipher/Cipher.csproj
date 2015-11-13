@@ -39,6 +39,7 @@
     <Reference Include="System.Xml.Linq" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Config.cs" />
     <Compile Include="Encryption.cs" />
     <Compile Include="Gui.cs" />
     <Compile Include="Program.cs" />

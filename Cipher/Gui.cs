@@ -14,33 +14,6 @@ namespace Cipher
             Application.Init();
         }
 
-        private static void ParseConfigFile(out string server, out int port)
-        {
-            System.Xml.Linq.XElement root;
-            try
-            {
-                root = System.Xml.Linq.XElement.Load("config.xml");
-            }
-            catch
-            {
-                root = null;
-            }
-            var serverElement = root?.Element("Server");
-            var portElement = root?.Element("Port");
-            if (serverElement != null)
-                server = serverElement.Value;
-            else
-            {
-                server = "71.13.216.7";
-                Console.WriteLine("Didn't load server address");
-            }
-            if (portElement == null || !int.TryParse(portElement.Value, out port))
-            {
-                port = 60100;
-                Console.WriteLine("Didn't load server port");
-            }
-        }
-
         public Gui(string name)
         {
             Client client = null;
@@ -80,9 +53,8 @@ namespace Cipher
                 Application.Quit();
             };
 
-            string server;
-            int port;
-            ParseConfigFile(out server, out port);
+            string server = Config.Get("Server", "71.13.216.7");
+            int port = Config.Get("Port", 60100, int.TryParse);
             client = new Client(server, port, new EncryptionService(), name, (sender, eventArg) =>
             {
                 while (true)

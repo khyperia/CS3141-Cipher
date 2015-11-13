@@ -198,7 +198,7 @@ namespace Cipher
 
         private readonly List<ClientCon> clients;
 
-        private string dbString = "server=localhost;uid=EMS;pwd=Team_cipher5;database=Cipher;";
+        private string dbString;
 
         struct ClientCon
         {
@@ -218,6 +218,7 @@ namespace Cipher
 
         public Server(int port)
         {
+            dbString = Config.Get("DbString", "server=localhost;uid=EMS;pwd=Team_cipher5;database=Cipher;");
             clients = new List<ClientCon>();
             serverSocket = new TcpListener(IPAddress.Any, port);
         }
