@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
-using Gtk;
 using MySql.Data.MySqlClient;
+using System.Windows.Forms;
 
 namespace Cipher
 {
@@ -32,14 +31,14 @@ namespace Cipher
         private readonly BinaryReader reader;
         private readonly BinaryWriter writer;
         private readonly Queue<KeyValuePair<string, string>> incomingMessages;
-        private readonly EventHandler onChange;
-        private readonly bool useApplicationInvoke;
+        private readonly Action onChange;
+        private readonly Control invokeOnChangeObj;
 
-        public Client(string server, int port, EncryptionService encryption, string myName, EventHandler onChange, bool useApplicationInvoke)
+        public Client(string server, int port, EncryptionService encryption, string myName, Action onChange, Control invokeOnChangeObj)
         {
             this.encryption = encryption;
             this.onChange = onChange;
-            this.useApplicationInvoke = useApplicationInvoke;
+            this.invokeOnChangeObj = invokeOnChangeObj;
             incomingMessages = new Queue<KeyValuePair<string, string>>();
             client = new TcpClient(server, port);
             var stream = client.GetStream();
@@ -54,13 +53,13 @@ namespace Cipher
 
         private void OnChange()
         {
-            if (useApplicationInvoke)
+            if (invokeOnChangeObj != null)
             {
-                Application.Invoke(onChange);
+                invokeOnChangeObj.BeginInvoke(onChange);
             }
             else
             {
-                onChange(null, null);
+                onChange();
             }
         }
 
