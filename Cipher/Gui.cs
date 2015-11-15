@@ -22,6 +22,7 @@ namespace Cipher
             RichTextBox inputBox = new RichTextBox();
             Panel contactPanel = new Panel();
             ListBox contacts = new ListBox();
+            Button refreshContacts = new Button();
 
             Action<string> showBuffer = (buffer) =>
             {
@@ -114,14 +115,15 @@ namespace Cipher
 
             contactPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
             contactPanel.Controls.Add(contacts);
+            contactPanel.Controls.Add(refreshContacts);
             contactPanel.Location = new Point(400, 0);
             contactPanel.Name = "ContactPanel";
             contactPanel.Size = new Size(200, 600);
             contactPanel.TabIndex = 0;
 
-            contacts.Dock = DockStyle.Fill;
+            contacts.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             contacts.Location = new Point(0, 0);
-            contacts.Size = new Size(200, 600);
+            contacts.Size = new Size(200, 500);
             contacts.TabIndex = 1;
             contacts.Name = "Contacts";
             contacts.SelectionMode = SelectionMode.One;
@@ -133,6 +135,17 @@ namespace Cipher
                     sendingTo = selected;
                     showBuffer(selected.Username);
                 }
+            };
+
+            refreshContacts.Anchor = AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
+            refreshContacts.Location = new Point(0, 500);
+            refreshContacts.Size = new Size(200, 100);
+            refreshContacts.TabIndex = 1;
+            refreshContacts.Name = "RefreshContacts";
+            refreshContacts.Text = "Refresh contacts";
+            refreshContacts.Click += (sender, args) =>
+            {
+                client.UpdateKeyPairs();
             };
 
             window.AutoScaleDimensions = new SizeF(12F, 25F);
@@ -173,7 +186,10 @@ namespace Cipher
                     contacts.Items.Clear();
                     foreach (var user in client.GetUsers())
                     {
-                        contacts.Items.Add(user);
+                        if (!string.Equals(user.Username, name, StringComparison.OrdinalIgnoreCase))
+                        {
+                            contacts.Items.Add(user);
+                        }
                     }
                 }
             }, window);
