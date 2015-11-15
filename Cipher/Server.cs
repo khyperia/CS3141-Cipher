@@ -111,7 +111,8 @@ namespace Cipher
             {
                 if (user.PublicKey == sentTo)
                 {
-                    AddIncomingMessage("[server]", "Sending to " + user.Username + " failed: user not online");
+                    // TODO: Somehow tell that this is a special message
+                    AddIncomingMessage(user.Username, "Sending to " + user.Username + " failed: user not online");
                 }
             }
         }
@@ -435,7 +436,6 @@ namespace Cipher
 
         private int CheckDatabase(string nick, string pubkey)
         {
-            nick = nick.ToLower(); // TODO: Decide if we want this?
             int result = -1;
             int numOfUsers = 0;
             var dbConnection = new MySqlConnection(dbString);
