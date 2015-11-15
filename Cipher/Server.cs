@@ -86,15 +86,13 @@ namespace Cipher
 
         private void ProcessListres(BinaryReader reader)
         {
-            var dict = new List<RemoteUser>();
             var count = reader.ReadInt32();
             for (int i = 0; i < count; i++)
             {
                 var name = reader.ReadString();
                 var pubkey = reader.ReadString();
-                dict.Add(new RemoteUser(pubkey, name));
+                encryption.AddUser(new RemoteUser(pubkey, name));
             }
-            encryption.AddUsers(dict);
             OnChange();
         }
 
@@ -109,7 +107,7 @@ namespace Cipher
         private void ProcessUserNotFound(BinaryReader reader)
         {
             var sentTo = reader.ReadString();
-            foreach (var user in encryption.LoadUserDatabase())
+            foreach (var user in encryption.LoadUsers())
             {
                 if (user.PublicKey == sentTo)
                 {
@@ -160,9 +158,9 @@ namespace Cipher
             writer.Write("list");
         }
 
-        public ISet<RemoteUser> GetUsers()
+        public IEnumerable<RemoteUser> GetUsers()
         {
-            return encryption.LoadUserDatabase();
+            return encryption.LoadUsers();
         }
 
         public IEnumerable<RemoteUser> LookUpUser(string username)
@@ -271,14 +269,28 @@ namespace Cipher
 
         private void ProcessList(ClientCon me)
         {
-            lock (clients)
+            var list = ListUsers();
+            if (list == null)
+            {
+                lock (clients)
+                {
+                    me.Writer.Write("listres");
+                    me.Writer.Write(clients.Count);
+                    foreach (var other in clients)
+                    {
+                        me.Writer.Write(other.Name);
+                        me.Writer.Write(other.Pubkey);
+                    }
+                }
+            }
+            else
             {
                 me.Writer.Write("listres");
-                me.Writer.Write(clients.Count);
-                foreach (var other in clients)
+                me.Writer.Write(list.Count);
+                foreach (var user in list)
                 {
-                    me.Writer.Write(other.Name);
-                    me.Writer.Write(other.Pubkey);
+                    me.Writer.Write(user.Value);
+                    me.Writer.Write(user.Key);
                 }
             }
         }
@@ -395,8 +407,35 @@ namespace Cipher
             }
         }
 
+        // key = pubkey, value = username
+        private List<KeyValuePair<string, string>> ListUsers()
+        {
+            using (var dbConnection = new MySqlConnection(dbString))
+            {
+                dbConnection.Open();
+                using (var cmd = dbConnection.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT * FROM users";
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        var list = new List<KeyValuePair<string, string>>();
+                        while (reader.Read())
+                        {
+                            var publickey = reader.GetString("public_key");
+                            var username = reader.GetString("username");
+                            list.Add(new KeyValuePair<string, string>(publickey, username));
+                        }
+                        reader.Close();
+                        dbConnection.Close();
+                        return list;
+                    }
+                }
+            }
+        }
+
         private int CheckDatabase(string nick, string pubkey)
         {
+            nick = nick.ToLower(); // TODO: Decide if we want this?
             int result = -1;
             int numOfUsers = 0;
             var dbConnection = new MySqlConnection(dbString);
@@ -417,7 +456,7 @@ namespace Cipher
                     // insert user into db.
                     cmd = dbConnection.CreateCommand();
                     cmd.CommandText = "INSERT INTO users(username, public_key) VALUES (@user, @key)";
-                    cmd.Parameters.AddWithValue("@user", nick.ToLower());
+                    cmd.Parameters.AddWithValue("@user", nick);
                     cmd.Parameters.AddWithValue("@key", pubkey);
                     cmd.ExecuteNonQuery();
                     result = 0;
@@ -428,7 +467,7 @@ namespace Cipher
                     Console.WriteLine("Returning user possibly detected.");
                     cmd = dbConnection.CreateCommand();
                     cmd.CommandText = "SELECT public_key FROM users WHERE username=@user";
-                    cmd.Parameters.AddWithValue("@user", nick.ToLower());
+                    cmd.Parameters.AddWithValue("@user", nick);
                     string serverPublicKey = Convert.ToString(cmd.ExecuteScalar());
                     if (serverPublicKey == pubkey)
                     {

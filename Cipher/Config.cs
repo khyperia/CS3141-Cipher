@@ -25,6 +25,12 @@ namespace Cipher
             root.Save(configFilename);
         }
 
+        public static void Set(string key, string value)
+        {
+            root.SetElementValue(key, value);
+            Save();
+        }
+
         public static string Get(string key, string defaultValue)
         {
             var value = root.Element(key);
@@ -32,8 +38,7 @@ namespace Cipher
             {
                 return value.Value;
             }
-            root.SetElementValue(key, defaultValue);
-            Save();
+            Set(key, defaultValue);
             return defaultValue;
         }
         
