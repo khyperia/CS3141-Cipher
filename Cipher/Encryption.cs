@@ -49,6 +49,11 @@ namespace Cipher
         {
             return !(left == right);
         }
+
+        public override string ToString()
+        {
+            return Username;
+        }
     }
 
     class EncryptionService

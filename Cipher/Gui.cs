@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Cipher
@@ -13,6 +10,8 @@ namespace Cipher
         public Gui(string name)
         {
             Client client = null;
+            RemoteUser sendingTo = null;
+            Dictionary<string, string> buffers = new Dictionary<string, string>();
 
             Form window = new Form();
             Panel chatInputPanel = new Panel();
@@ -22,6 +21,30 @@ namespace Cipher
             Button sendButton = new Button();
             RichTextBox inputBox = new RichTextBox();
             Panel contactPanel = new Panel();
+            ListBox contacts = new ListBox();
+
+            Action<string> showBuffer = (buffer) =>
+            {
+                if (!buffers.ContainsKey(buffer))
+                    buffers[buffer] = "";
+                var prefix = buffer == "" ? "Buffer server\n" : "Buffer \"" + buffer + "\"\n";
+                chatBox.Text = prefix + buffers[buffer];
+                for (int i = 0; i < contacts.Items.Count; i++)
+                {
+                    if (((RemoteUser)contacts.Items[i]).Username == buffer)
+                    {
+                        contacts.SelectedIndex = i;
+                    }
+                }
+            };
+
+            Action<string, string> printToBuffer = (buffer, message) =>
+            {
+                if (!buffers.ContainsKey(buffer))
+                    buffers[buffer] = "";
+                buffers[buffer] += message + "\n";
+                showBuffer(buffer);
+            };
 
             window.SuspendLayout();
             chatInputPanel.SuspendLayout();
@@ -77,16 +100,40 @@ namespace Cipher
             sendButton.UseVisualStyleBackColor = true;
             sendButton.Click += (sender, args) =>
             {
-                // TODO: Actually implement this
-                client.SendMessage(client.LookUpUser("alice").Single(), inputBox.Text);
-                inputBox.Text = "";
+                if (sendingTo == null)
+                {
+                    printToBuffer("", "No user selected");
+                }
+                else
+                {
+                    printToBuffer(sendingTo.Username, string.Format("<{0}> {1}", name, inputBox.Text));
+                    client.SendMessage(sendingTo, inputBox.Text);
+                    inputBox.Text = "";
+                }
             };
 
-            contactPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            contactPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
+            contactPanel.Controls.Add(contacts);
             contactPanel.Location = new Point(400, 0);
             contactPanel.Name = "ContactPanel";
             contactPanel.Size = new Size(200, 600);
             contactPanel.TabIndex = 0;
+
+            contacts.Dock = DockStyle.Fill;
+            contacts.Location = new Point(0, 0);
+            contacts.Size = new Size(200, 600);
+            contacts.TabIndex = 1;
+            contacts.Name = "Contacts";
+            contacts.SelectionMode = SelectionMode.One;
+            contacts.SelectedValueChanged += (sender, args) =>
+            {
+                if (contacts.SelectedIndex != -1)
+                {
+                    var selected = (RemoteUser)contacts.Items[contacts.SelectedIndex];
+                    sendingTo = selected;
+                    showBuffer(selected.Username);
+                }
+            };
 
             window.AutoScaleDimensions = new SizeF(12F, 25F);
             window.AutoScaleMode = AutoScaleMode.Font;
@@ -106,20 +153,30 @@ namespace Cipher
             chatInputPanel.ResumeLayout(false);
             window.ResumeLayout(false);
 
+            window.Show();
+
             string server = Config.Get("Server", "71.13.216.7");
             int port = Config.Get("Port", 60100, int.TryParse);
             client = new Client(server, port, new EncryptionService(), name, () =>
             {
+                var message = false;
                 while (true)
                 {
                     var dequeue = client.TryGetNextMessage();
                     if (dequeue.Key == null)
                         break;
-                    chatBox.Text += string.Format("<{0}> {1}", dequeue.Key, dequeue.Value);
+                    printToBuffer(dequeue.Key, string.Format("<{0}> {1}", dequeue.Key, dequeue.Value));
+                    message = true;
+                }
+                if (!message)
+                {
+                    contacts.Items.Clear();
+                    foreach (var user in client.GetUsers())
+                    {
+                        contacts.Items.Add(user);
+                    }
                 }
             }, window);
-
-            window.Show();
         }
 
         public void Run()
