@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -53,11 +53,12 @@ namespace Cipher
 
     class EncryptionService
     {
-        ISet<RemoteUser> _userDatabaseCache;
+        ConcurrentDictionary<string, string> _userDatabase; // publickey to username
         private static readonly object _signObject = new SHA1CryptoServiceProvider();
 
         public EncryptionService()
         {
+            _userDatabase = new ConcurrentDictionary<string, string>();
         }
 
         private static RSACryptoServiceProvider PrivateKey
@@ -70,93 +71,25 @@ namespace Cipher
             }
         }
 
-        private string UserDatabaseName
+        public IEnumerable<RemoteUser> LoadUsers()
         {
-            get
+            foreach (var user in _userDatabase)
             {
-                var specialFolder = Environment.SpecialFolder.LocalApplicationData;
-                var path = Environment.GetFolderPath(specialFolder);
-                path = Path.Combine(path, "CipherEMS");
-                if (!Directory.Exists(path))
-                {
-                    Directory.CreateDirectory(path);
-                }
-                path = Path.Combine(path, "keyDatabase");
-                return path;
+                yield return new RemoteUser(user.Key, user.Value);
             }
         }
 
-        public ISet<RemoteUser> LoadUserDatabase()
+        public void AddUser(RemoteUser toAdd)
         {
-            if (_userDatabaseCache == null)
-            {
-                var path = UserDatabaseName;
-                var result = new HashSet<RemoteUser>();
-                try
-                {
-                    using (var stream = File.OpenRead(path))
-                    {
-                        var reader = new BinaryReader(stream);
-                        while (reader.BaseStream.Position < reader.BaseStream.Length)
-                        {
-                            try
-                            {
-                                var name = reader.ReadString();
-                                var publickey = reader.ReadString();
-                                result.Add(new RemoteUser(publickey, name));
-                            }
-                            catch (Exception e)
-                            {
-                                Console.WriteLine("Local user database is corrupted: " + e.Message);
-                                break;
-                            }
-                        }
-                    }
-                }
-                catch (FileNotFoundException)
-                {
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine("Unable to load local user database: " + e.Message);
-                }
-                System.Threading.Interlocked.CompareExchange(ref _userDatabaseCache, result, null);
-            }
-            return new HashSet<RemoteUser>(_userDatabaseCache); // clone set
-        }
-
-        private void SaveUserDatabase(ISet<RemoteUser> toSave)
-        {
-            using (var stream = File.Open(UserDatabaseName, FileMode.Create))
-            {
-                var writer = new BinaryWriter(stream);
-                foreach (var kvp in toSave)
-                {
-                    writer.Write(kvp.Username);
-                    writer.Write(kvp.PublicKey);
-                }
-            }
-            _userDatabaseCache = toSave;
+            _userDatabase[toAdd.PublicKey] = toAdd.Username;
         }
 
         public void AddUsers(IEnumerable<RemoteUser> remoteUsers)
         {
-            var data = LoadUserDatabase();
             foreach (var remoteUser in remoteUsers)
             {
-                data.Remove(remoteUser);
-                data.Add(remoteUser);
+                AddUser(remoteUser);
             }
-            SaveUserDatabase(data);
-        }
-
-        public void AddUser(string username, string privatekey)
-        {
-            var data = LoadUserDatabase();
-            var user = new RemoteUser(username, privatekey);
-            data.Remove(user);
-            data.Add(user);
-            SaveUserDatabase(data);
         }
 
         public string MyKey
@@ -177,12 +110,11 @@ namespace Cipher
 
         public IEnumerable<RemoteUser> LookUpUser(string username)
         {
-            var data = LoadUserDatabase();
-            foreach (var remoteUser in data)
+            foreach (var user in _userDatabase)
             {
-                if (remoteUser.Username == username)
+                if (user.Value == username)
                 {
-                    yield return remoteUser;
+                    yield return new RemoteUser(user.Key, user.Value);
                 }
             }
         }
