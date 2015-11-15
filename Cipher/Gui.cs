@@ -13,6 +13,8 @@ namespace Cipher
             RemoteUser sendingTo = null;
             Dictionary<string, string> buffers = new Dictionary<string, string>();
 
+            // GUI Components
+            // Please list all component inits here to keep track
             Form window = new Form();
             Panel chatInputPanel = new Panel();
             Panel chatPanel = new Panel();
@@ -46,14 +48,18 @@ namespace Cipher
                 buffers[buffer] += message + "\n";
                 showBuffer(buffer);
             };
-
+            
+            //suspend layouts to make componets add easier
             window.SuspendLayout();
             chatInputPanel.SuspendLayout();
             chatPanel.SuspendLayout();
             inputSendPanel.SuspendLayout();
             contactPanel.SuspendLayout();
 
+            //chat and input panel, split from contact panel
+            //anchored to all sides to maintain proportional scaling
             chatInputPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            //contains the input and send panel as well as chat panel
             chatInputPanel.Controls.Add(inputSendPanel);
             chatInputPanel.Controls.Add(chatPanel);
             chatInputPanel.Location = new Point(0, 0);
@@ -61,23 +67,32 @@ namespace Cipher
             chatInputPanel.Size = new Size(400, 600);
             chatInputPanel.TabIndex = 0;
 
+            //chat panel, split from input panel
+            //anchored ot all sides to maintain proportional scaling
             chatPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            //contains the chat box
             chatPanel.Controls.Add(chatBox);
             chatPanel.Location = new Point(0, 0);
             chatPanel.Name = "ChatPanel";
             chatPanel.Size = new Size(400, 500);
             chatPanel.TabIndex = 1;
 
+            //chat box, main chat log
             chatBox.BackColor = SystemColors.Window;
+            //docked to fill as it's the component in the chat panel
             chatBox.Dock = DockStyle.Fill;
             chatBox.Location = new Point(0, 0);
             chatBox.Name = "ChatBox";
+            //note readonly
             chatBox.ReadOnly = true;
             chatBox.Size = new Size(400, 500);
             chatBox.TabIndex = 2;
             chatBox.Text = "";
 
+            //input send panel, split from chat panel
+            //anchored to only bottom, left, right to make height constant during scaling
             inputSendPanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            //contains the input box and send button
             inputSendPanel.Controls.Add(sendButton);
             inputSendPanel.Controls.Add(inputBox);
             inputSendPanel.Location = new Point(0, 500);
@@ -85,6 +100,8 @@ namespace Cipher
             inputSendPanel.Size = new Size(400, 100);
             inputSendPanel.TabIndex = 1;
 
+            //input box, split from the send button
+            //anchored ot all sides to maintain proportional scaling
             inputBox.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             inputBox.Location = new Point(0, 0);
             inputBox.Name = "InputBox";
@@ -92,6 +109,8 @@ namespace Cipher
             inputBox.TabIndex = 2;
             inputBox.Text = "";
 
+            //send button, split from input box
+            //anchored to only top, bottom, right to make width constant during scaling
             sendButton.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
             sendButton.Location = new Point(300, 0);
             sendButton.Name = "SendButton";
@@ -113,7 +132,10 @@ namespace Cipher
                 }
             };
 
+            //contact panel, split from chat input panel
+            //anchored to only top, bottom, right to make width constant during scaling
             contactPanel.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
+            //contains the contacts listbox and refresh contacts button
             contactPanel.Controls.Add(contacts);
             contactPanel.Controls.Add(refreshContacts);
             contactPanel.Location = new Point(400, 0);
@@ -121,6 +143,8 @@ namespace Cipher
             contactPanel.Size = new Size(200, 600);
             contactPanel.TabIndex = 0;
 
+            //contacts listbox, contains a seletable list of users, split from refresh contacts button
+            //anchored ot all sides to maintain proportional scaling
             contacts.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             contacts.Location = new Point(0, 0);
             contacts.Size = new Size(200, 500);
@@ -137,6 +161,8 @@ namespace Cipher
                 }
             };
 
+            //refresh contacts, split from contacts listbox
+            //anchored to only left, bottom, right to make height constant during scaling
             refreshContacts.Anchor = AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right;
             refreshContacts.Location = new Point(0, 500);
             refreshContacts.Size = new Size(200, 100);
@@ -148,9 +174,12 @@ namespace Cipher
                 client.UpdateKeyPairs();
             };
 
+            //main window
+            //autoscaled based off of font size
             window.AutoScaleDimensions = new SizeF(12F, 25F);
             window.AutoScaleMode = AutoScaleMode.Font;
             window.ClientSize = new Size(600, 600);
+            //contains the chat input panel, and contact panel
             window.Controls.Add(chatInputPanel);
             window.Controls.Add(contactPanel);
             window.Name = "Window";
