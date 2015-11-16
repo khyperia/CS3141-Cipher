@@ -11,6 +11,7 @@ namespace Cipher
         {
             Client client = null;
             RemoteUser sendingTo = null;
+            // Contains a mapping from buffer name to buffer text
             Dictionary<string, string> buffers = new Dictionary<string, string>();
 
             // GUI Components
@@ -26,11 +27,12 @@ namespace Cipher
             ListBox contacts = new ListBox();
             Button refreshContacts = new Button();
 
-            Action<string> showBuffer = (buffer) =>
+            // Displays the given buffer (and sets the selected contact)
+            Action<string> showBuffer = buffer =>
             {
                 if (!buffers.ContainsKey(buffer))
                     buffers[buffer] = "";
-                var prefix = buffer == "" ? "Buffer server\n" : "Buffer \"" + buffer + "\"\n";
+                var prefix = " -- Buffer \"" + buffer + "\" --\n";
                 chatBox.Text = prefix + buffers[buffer];
                 for (int i = 0; i < contacts.Items.Count; i++)
                 {
@@ -41,6 +43,7 @@ namespace Cipher
                 }
             };
 
+            // Prints to a buffer, and then automatically switches to it.
             Action<string, string> printToBuffer = (buffer, message) =>
             {
                 if (!buffers.ContainsKey(buffer))
@@ -120,11 +123,7 @@ namespace Cipher
             sendButton.UseVisualStyleBackColor = true;
             sendButton.Click += (sender, args) =>
             {
-                if (sendingTo == null)
-                {
-                    printToBuffer("", "No user selected");
-                }
-                else
+                if (sendingTo != null)
                 {
                     printToBuffer(sendingTo.Username, string.Format("<{0}> {1}", name, inputBox.Text));
                     client.SendMessage(sendingTo, inputBox.Text);
@@ -197,6 +196,7 @@ namespace Cipher
 
             window.Show();
 
+            // Connect to the server, with the default server if not specified
             string server = Config.Get("Server", "71.13.216.7");
             int port = Config.Get("Port", 60100, int.TryParse);
             client = new Client(server, port, new EncryptionService(), name, () =>
@@ -204,17 +204,22 @@ namespace Cipher
                 var message = false;
                 while (true)
                 {
+                    // get all incoming messages
                     var dequeue = client.TryGetNextMessage();
                     if (dequeue.Key == null)
                         break;
+                    // print it to the buffer named their nick
                     printToBuffer(dequeue.Key, string.Format("<{0}> {1}", dequeue.Key, dequeue.Value));
                     message = true;
                 }
                 if (!message)
                 {
+                    // if we didn't get a new message, then the reason we're called is probably a nicklist update
+                    // so clear the nicklist and re-add them
                     contacts.Items.Clear();
                     foreach (var user in client.GetUsers())
                     {
+                        // don't add ourselves as a selectable item
                         if (!string.Equals(user.Username, name, StringComparison.OrdinalIgnoreCase))
                         {
                             contacts.Items.Add(user);
@@ -229,5 +234,4 @@ namespace Cipher
             Application.Run();
         }
     }
-
 }

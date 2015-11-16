@@ -9,8 +9,11 @@ using System.Windows.Forms;
 
 namespace Cipher
 {
+    // Helper class to write network packets
     static class NetworkHelper
     {
+        // {Write,Read}LenBytes transfers a binary blob with length encoded
+        // (not provided by BinaryReader/Writer by default)
         public static void WriteLenBytes(this BinaryWriter writer, byte[] value)
         {
             writer.Write(value.Length);
@@ -34,8 +37,11 @@ namespace Cipher
         private readonly Action onChange;
         private readonly Control invokeOnChangeObj;
 
+        // if invokeOnChangeObj is not null, then onChange is called via BeginInvoke on that object.
+        // Otherwise it's called on a background thread (the network thread).
         public Client(string server, int port, EncryptionService encryption, string myName, Action onChange, Control invokeOnChangeObj)
         {
+            // Connect to server:port, open the streams, send authentication info, send a `list` command, and boot the processing thread.
             this.encryption = encryption;
             this.onChange = onChange;
             this.invokeOnChangeObj = invokeOnChangeObj;
@@ -53,6 +59,7 @@ namespace Cipher
 
         private void OnChange()
         {
+            // See comments around constructor
             if (invokeOnChangeObj != null)
             {
                 invokeOnChangeObj.BeginInvoke(onChange);
@@ -63,6 +70,7 @@ namespace Cipher
             }
         }
 
+        // Send the initial authentication packet
         private void Authenticate(string myName)
         {
             var memstream = new MemoryStream();
@@ -75,6 +83,7 @@ namespace Cipher
             writer.WriteLenBytes(sign);
         }
 
+        // Helper to enqueue a message and call OnChange
         private void AddIncomingMessage(string name, string message)
         {
             lock (incomingMessages)
@@ -84,6 +93,7 @@ namespace Cipher
             OnChange();
         }
 
+        // Process the `listres` message - list of name/publickey pairs
         private void ProcessListres(BinaryReader reader)
         {
             var count = reader.ReadInt32();
@@ -96,6 +106,7 @@ namespace Cipher
             OnChange();
         }
 
+        // Process the `recv` message - name, encrypted message pair
         private void ProcessMsgRecv(BinaryReader reader)
         {
             var name = reader.ReadString();
@@ -104,6 +115,7 @@ namespace Cipher
             AddIncomingMessage(name, decrypt);
         }
 
+        // Process the `usernotfound` message - publickey of target
         private void ProcessUserNotFound(BinaryReader reader)
         {
             var sentTo = reader.ReadString();
@@ -117,6 +129,7 @@ namespace Cipher
             }
         }
 
+        // Read a message header and call the appropriate helper method
         private void ProcessCmd(BinaryReader reader, BinaryWriter writer)
         {
             var cmd = reader.ReadString();
@@ -138,6 +151,7 @@ namespace Cipher
             }
         }
 
+        // Main processing loop for the background thread
         private void ProcessRecv()
         {
             try
@@ -154,21 +168,25 @@ namespace Cipher
             }
         }
 
+        // Send a `list` command - should get a `listres` back shortly afterwards
         public void UpdateKeyPairs()
         {
             writer.Write("list");
         }
 
+        // Get a list of all users known to the server (cached). Call UpdateKeyPairs to refresh
         public IEnumerable<RemoteUser> GetUsers()
         {
             return encryption.LoadUsers();
         }
 
+        // Looks up a user by username
         public IEnumerable<RemoteUser> LookUpUser(string username)
         {
             return encryption.LookUpUser(username);
         }
 
+        // Sends a message to the specified user.
         public void SendMessage(RemoteUser toUser, string message)
         {
             var encrypt = EncryptionService.Encrypt(message, toUser);
@@ -177,6 +195,7 @@ namespace Cipher
             writer.WriteLenBytes(encrypt);
         }
 
+        // Tries to dequeue a message. Result field are null if no message.
         public KeyValuePair<string, string> TryGetNextMessage()
         {
             lock (incomingMessages)
@@ -214,6 +233,7 @@ namespace Cipher
             }
         }
 
+        // Creates a server that listens on the specified port
         public Server(int port)
         {
             dbString = Config.Get("DbString", "server=localhost;uid=EMS;pwd=Team_cipher5;database=Cipher;");
@@ -221,6 +241,7 @@ namespace Cipher
             serverSocket = new TcpListener(IPAddress.Any, port);
         }
 
+        // Runs the main loop for the server
         public void Run()
         {
             serverSocket.Start();
@@ -228,6 +249,7 @@ namespace Cipher
             {
                 try
                 {
+                    // Boot a new thread for every client that connects
                     var client = serverSocket.AcceptTcpClient();
                     var thread = new Thread(RunClientListen);
                     thread.IsBackground = true;
@@ -243,6 +265,7 @@ namespace Cipher
             serverSocket.Stop();
         }
 
+        // Process (send to dest) a message from a client
         private void ProcessMsg(BinaryReader reader, ClientCon me)
         {
             var sendToKey = reader.ReadString();
@@ -268,6 +291,8 @@ namespace Cipher
             }
         }
 
+        // Process a `list` command
+        // Use database if available, otherwise use currently connected users
         private void ProcessList(ClientCon me)
         {
             var list = ListUsers();
@@ -296,6 +321,7 @@ namespace Cipher
             }
         }
 
+        // Read a header of a message and process the corresponding command
         private void ProcessCmd(BinaryReader reader, ClientCon me)
         {
             var cmd = reader.ReadString();
@@ -313,6 +339,7 @@ namespace Cipher
             }
         }
 
+        // Read an authentication message and return a valid ClientCon if successful.
         private ClientCon Authenticate(TcpClient tcpClient, BinaryWriter writer, BinaryReader reader)
         {
             var pubkey = reader.ReadString();
@@ -320,14 +347,17 @@ namespace Cipher
             var signature = reader.ReadLenBytes();
             try
             {
+                // verify signature
                 if (!EncryptionService.VerifySigned(authToken, signature, pubkey))
                 {
                     return new ClientCon();
                 }
+                // extract nick from token
                 var authReader = new BinaryReader(new MemoryStream(authToken));
                 var nick = authReader.ReadString();
                 lock (clients)
                 {
+                    // check to see if logging in same as someone else
                     foreach (var other in clients)
                     {
                         if (other.Pubkey == pubkey && other.Name != nick)
@@ -359,6 +389,7 @@ namespace Cipher
             }
         }
 
+        // Main loop for a client
         private void RunClientListen(object state)
         {
             var client = (TcpClient)state;
@@ -368,6 +399,7 @@ namespace Cipher
             Console.WriteLine(client.Client.RemoteEndPoint + ": connected");
             try
             {
+                // Authenticate
                 var clientCon = Authenticate(client, writer, reader);
                 if (clientCon.Name == null)
                 {
@@ -382,6 +414,7 @@ namespace Cipher
                     Console.WriteLine(client.Client.RemoteEndPoint + ": authed as " + clientCon.Name);
                     while (true)
                     {
+                        // Main loop
                         ProcessCmd(reader, clientCon);
                     }
                 }
@@ -408,6 +441,7 @@ namespace Cipher
             }
         }
 
+        // Do a SELECT * from the database and return a list of all users
         // key = pubkey, value = username
         private List<KeyValuePair<string, string>> ListUsers()
         {
@@ -434,6 +468,7 @@ namespace Cipher
             }
         }
 
+        // Authenticate the nick/pubkey
         private int CheckDatabase(string nick, string pubkey)
         {
             int result = -1;
