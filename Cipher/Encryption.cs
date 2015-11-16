@@ -6,6 +6,8 @@ using System.Text;
 
 namespace Cipher
 {
+    // Struct that contains a public key and username, plus all the .net machenery for custom equality
+    // Also has ToString return Username
     class RemoteUser : IEquatable<RemoteUser>
     {
         public string PublicKey { get; }
@@ -66,6 +68,7 @@ namespace Cipher
             _userDatabase = new ConcurrentDictionary<string, string>();
         }
 
+        // Returns our private key
         private static RSACryptoServiceProvider PrivateKey
         {
             get
@@ -76,6 +79,7 @@ namespace Cipher
             }
         }
 
+        // Lists all locally cached users
         public IEnumerable<RemoteUser> LoadUsers()
         {
             foreach (var user in _userDatabase)
@@ -84,19 +88,13 @@ namespace Cipher
             }
         }
 
+        // Adds a remote user
         public void AddUser(RemoteUser toAdd)
         {
             _userDatabase[toAdd.PublicKey] = toAdd.Username;
         }
 
-        public void AddUsers(IEnumerable<RemoteUser> remoteUsers)
-        {
-            foreach (var remoteUser in remoteUsers)
-            {
-                AddUser(remoteUser);
-            }
-        }
-
+        // Returns our public key as a string
         public string MyKey
         {
             get
@@ -105,6 +103,7 @@ namespace Cipher
             }
         }
 
+        // Signed a binary blob with the private key
         public byte[] Sign(byte[] value)
         {
             using (var myKey = PrivateKey)
@@ -113,6 +112,7 @@ namespace Cipher
             }
         }
 
+        // Looks up a user by their name (zero to many results)
         public IEnumerable<RemoteUser> LookUpUser(string username)
         {
             foreach (var user in _userDatabase)
@@ -124,6 +124,7 @@ namespace Cipher
             }
         }
 
+        // Verifies a blob/sig pair coming from a key
         public static bool VerifySigned(byte[] value, byte[] signature, string publickey)
         {
             using (var theirKey = new RSACryptoServiceProvider())
@@ -133,6 +134,7 @@ namespace Cipher
             }
         }
 
+        // Encrypts a binary blob with a public key
         public static byte[] Encrypt(byte[] value, string publicKey)
         {
             using (var theirKey = new RSACryptoServiceProvider())
@@ -142,11 +144,13 @@ namespace Cipher
             }
         }
 
+        // Encrypts a string to a blob
         public static byte[] Encrypt(string value, RemoteUser toUser)
         {
             return Encrypt(Encoding.UTF8.GetBytes(value), toUser.PublicKey);
         }
 
+        // Decrypts a blob using our private key
         public byte[] DecryptBytes(byte[] value)
         {
             using (var myKey = PrivateKey)
@@ -155,6 +159,7 @@ namespace Cipher
             }
         }
 
+        // Decrypts a blob to a string using our private key
         public string Decrypt(byte[] value)
         {
             return Encoding.UTF8.GetString(DecryptBytes(value));
