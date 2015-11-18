@@ -236,7 +236,7 @@ namespace Cipher
         // Creates a server that listens on the specified port
         public Server(int port)
         {
-            dbString = Config.Get("DbString", "server=71.13.216.7;uid=EMS;pwd=Team_cipher5;database=Cipher;");
+            dbString = Config.Get("DbString", "server=localhost;uid=EMS;pwd=Team_cipher5;database=Cipher;");
             clients = new List<ClientCon>();
             serverSocket = new TcpListener(IPAddress.Any, port);
         }
