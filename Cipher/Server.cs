@@ -236,7 +236,7 @@ namespace Cipher
         // Creates a server that listens on the specified port
         public Server(int port)
         {
-            dbString = Config.Get("DbString", "server=localhost;uid=EMS;pwd=Team_cipher5;database=Cipher;");
+            dbString = Config.Get("DbString", "server=71.13.216.7;uid=EMS;pwd=Team_cipher5;database=Cipher;");
             clients = new List<ClientCon>();
             serverSocket = new TcpListener(IPAddress.Any, port);
         }
@@ -469,10 +469,20 @@ namespace Cipher
         }
 
         // Authenticate the nick/pubkey
+        // This is what prevents duplicate usernames and duplicate public keys
+        //  return codes:
+        // (pass)
+        //      0=New use added; 1=returning user logged in;
+        // (fail)
+        //      2=new user tried to login with existing u/n;
+        //      3=existing user tried to make new account
+        //          (same public key as another u/n)
+        //      -1=some other database error
         private int CheckDatabase(string nick, string pubkey)
         {
             int result = -1;
             int numOfUsers = 0;
+            int numOfPublicKeys = 0;
             var dbConnection = new MySqlConnection(dbString);
             try
             {
@@ -481,24 +491,45 @@ namespace Cipher
 
                 var cmd = dbConnection.CreateCommand();
 
+                // get how many usernames match nick param
                 cmd.CommandText = "SELECT COUNT(*) FROM users WHERE username=@user";
                 cmd.Parameters.AddWithValue("@user", nick);
                 numOfUsers = Convert.ToInt32(cmd.ExecuteScalar());
 
+                // get how many public keys match pubkey
+                cmd.CommandText = "SELECT COUNT(*) FROM users WHERE public_key=@pk";
+                cmd.Parameters.AddWithValue("@pk", pubkey);
+                numOfPublicKeys = Convert.ToInt32(cmd.ExecuteScalar());
+
+                // check if nick exists
                 if (numOfUsers == 0)
                 {
-                    Console.WriteLine("New user detected.");
-                    // insert user into db.
-                    cmd = dbConnection.CreateCommand();
-                    cmd.CommandText = "INSERT INTO users(username, public_key) VALUES (@user, @key)";
-                    cmd.Parameters.AddWithValue("@user", nick);
-                    cmd.Parameters.AddWithValue("@key", pubkey);
-                    cmd.ExecuteNonQuery();
-                    result = 0;
+                    // if not, we may have a new user
+                    Console.WriteLine("New username detected. Checking public key.");
+                    
+                    // if no public key matched pubkey in the db, we have a new user
+                    if (numOfPublicKeys == 0)
+                    {
+                        Console.WriteLine("Public key is unique, welcome " + nick);
+                        // insert new user into db.
+                        cmd = dbConnection.CreateCommand();
+                        cmd.CommandText = "INSERT INTO users(username, public_key) VALUES (@user, @key)";
+                        cmd.Parameters.AddWithValue("@user", nick);
+                        cmd.Parameters.AddWithValue("@key", pubkey);
+                        cmd.ExecuteNonQuery();
+                        result = 0;
+                    }
+                    else
+                    {
+                        // we have a new username from a machine that is alread registered.
+                        Console.WriteLine("Public key already in database.");
+                        result = 3;
+                    }
+                    
                 }
                 else if (numOfUsers == 1)
                 {
-                    // user is already in db. check the key
+                    // username is already in db. check the public key to see if this is a login
                     Console.WriteLine("Returning user possibly detected.");
                     cmd = dbConnection.CreateCommand();
                     cmd.CommandText = "SELECT public_key FROM users WHERE username=@user";
@@ -506,11 +537,14 @@ namespace Cipher
                     string serverPublicKey = Convert.ToString(cmd.ExecuteScalar());
                     if (serverPublicKey == pubkey)
                     {
+                        // login complete
                         Console.WriteLine("Returning user confirmed.");
                         result = 1;
                     }
                     else
                     {
+                        // someone else is trying to connect as an existing
+                        // user, or trying to register with a taken username
                         Console.WriteLine("Duplicate username detected.");
                         result = 2;
                     }
@@ -523,12 +557,15 @@ namespace Cipher
             }
             catch (MySqlException e)
             {
+                // something went bad with the database. this should not happen
+                // as the db runs on localhost.
                 Console.WriteLine(e);
                 Console.WriteLine("MySql server connection failed.");
                 result = -1;
             }
             finally
             {
+                // close the database connection when we are done authenticating.
                 dbConnection.Close();
             }
             return result;
