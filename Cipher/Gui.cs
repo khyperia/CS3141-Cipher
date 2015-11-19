@@ -176,8 +176,18 @@ namespace Cipher
             {
                 if (sendingTo != null)
                 {
-                    printToBuffer(sendingTo.Username, string.Format("<{0}> {1}", name, inputBox.Text));
-                    client.SendMessage(sendingTo, inputBox.Text);
+                    string input = inputBox.Text;
+                    int msgMaxLen = 74;
+                    int numMsgs = input.Length / msgMaxLen + 1;
+                    for (int currMsg = 1; currMsg <= numMsgs; currMsg++)
+                    {
+                        int startSubString = (currMsg - 1) * msgMaxLen;
+                        int endSubString = (currMsg * msgMaxLen) < (input.Length) ? msgMaxLen : input.Length - ((currMsg - 1) * msgMaxLen);
+                        string message = string.Format("{0} ({1}/{2})", input.Substring(startSubString, endSubString), currMsg, numMsgs);
+
+                        printToBuffer(sendingTo.Username, string.Format("<{0}> {1}", name, message));
+                        client.SendMessage(sendingTo, message);
+                    }
                     inputBox.Text = "";
                 }
             };
