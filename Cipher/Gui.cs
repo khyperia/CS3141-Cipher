@@ -91,6 +91,23 @@ namespace Cipher
             chatBox.Size = new Size(400, 500);
             chatBox.TabIndex = 2;
             chatBox.Text = "";
+            //right mouse click will pull up the option to copy the chat box to clipboard
+            chatBox.MouseUp += (sender, args) =>
+            {
+                if (args.Button == MouseButtons.Right)
+                {
+                    ContextMenu options = new ContextMenu();
+
+                    MenuItem copy = new MenuItem("Copy");
+                    copy.Click += (copySender, copyArgs) =>
+                    {
+                        Clipboard.SetData(DataFormats.Rtf, chatBox.SelectedRtf);
+                    };
+                    options.MenuItems.Add(copy);
+
+                    chatBox.ContextMenu = options;
+                }
+            };
 
             //input send panel, split from chat panel
             //anchored to only bottom, left, right to make height constant during scaling
@@ -111,6 +128,40 @@ namespace Cipher
             inputBox.Size = new Size(300, 100);
             inputBox.TabIndex = 2;
             inputBox.Text = "";
+            //right mouse click will pull up the option to cut/copy/paste the input box with the clipboard
+            inputBox.MouseUp += (sender, args) =>
+            {
+                if (args.Button == MouseButtons.Right)
+                {
+                    ContextMenu options = new ContextMenu();
+
+                    MenuItem cut = new MenuItem("Cut");
+                    cut.Click += (cutSender, cutArgs) =>
+                    {
+                        inputBox.Cut();
+                    };
+                    options.MenuItems.Add(cut);
+
+                    MenuItem copy = new MenuItem("Copy");
+                    copy.Click += (copySender, copyArgs) =>
+                    {
+                        Clipboard.SetData(DataFormats.Rtf, inputBox.SelectedRtf);
+                    };
+                    options.MenuItems.Add(copy);
+                          
+                    MenuItem paste = new MenuItem("Paste");
+                    paste.Click += (pasteSender, pasteArgs) =>
+                    {
+                        if (Clipboard.ContainsText(TextDataFormat.Rtf))
+                        {
+                            inputBox.SelectedRtf = Clipboard.GetData(DataFormats.Rtf).ToString();
+                        }
+                    };
+                    options.MenuItems.Add(paste);
+
+                    inputBox.ContextMenu = options;
+                }
+            };
 
             //send button, split from input box
             //anchored to only top, bottom, right to make width constant during scaling
