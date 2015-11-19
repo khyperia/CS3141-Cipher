@@ -132,6 +132,7 @@ namespace Cipher
             return true;
         }
 
+        [STAThread]
         // Main entry point
         public static void Main(string[] args)
         {
